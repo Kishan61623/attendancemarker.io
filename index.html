@@ -3,363 +3,287 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>QR Attendance — Rural School Prototype</title>
+  <title>QR Attendance — Full Prototype</title>
+
   <style>
-    :root{--bg:#f7f7fb;--card:#ffffff;--muted:#666}
-    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:var(--bg);color:#111}
-    .container{max-width:1000px;margin:24px auto;padding:20px}
-    header{display:flex;gap:16px;align-items:center}
-    .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(20,20,40,0.06);}
-    .grid{display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:16px}
-    h1{margin:0;font-size:20px}
-    small{color:var(--muted)}
-    button{background:#0b63ff;color:#fff;padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
-    .list{max-height:420px;overflow:auto;margin-top:12px}
-    table{width:100%;border-collapse:collapse}
-    td,th{padding:8px;border-bottom:1px solid #eee;text-align:left}
-    .muted{color:var(--muted)}
-    input,select{padding:8px;border-radius:8px;border:1px solid #ddd;width:100%}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    .scanner-box{min-height:300px}
-    .footer-note{font-size:13px;color:var(--muted);margin-top:8px}
+    body{font-family:system-ui,Arial;margin:18px;background:#f6f8fb;color:#111}
+    .box{max-width:950px;margin:0 auto;background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    h1{margin:0 0 8px 0}
+    .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+    input[type=text],textarea{flex:1;padding:8px;border-radius:6px;border:1px solid #ddd}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#1f6feb;color:#fff;cursor:pointer}
+    button.ghost{background:#eee;color:#111}
+    canvas#qrCanvas{display:block;margin:12px 0;border:1px solid #ddd;border-radius:8px}
+    #video{width:100%;max-height:360px;border-radius:8px;border:1px solid #ddd;object-fit:cover}
+    small{color:#666}
+    #records{margin-top:12px;padding-left:18px}
+    a.download{display:inline-block;margin-left:8px}
+    textarea{width:100%;height:80px}
   </style>
-  <!-- html5-qrcode library (scanner) -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-  <!-- qrcode generator (optional) -->
+
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div>
-        <h1>Automated QR-scan Attendance — Prototype</h1>
-        <small class="muted">Designed for low-connectivity rural school use — works offline in a browser once loaded.</small>
+  <div class="box">
+    <h1>QR Attendance — Generator + Scanner + CSV</h1>
+
+    <!-- QR GENERATION -->
+    <section>
+      <h3>Generate QR</h3>
+      <div class="row">
+        <input id="genRoll" type="text" placeholder="Roll (e.g. 101)" />
+        <input id="genName" type="text" placeholder="Name (optional)" />
+        <button id="genBtn">Generate</button>
+        <a id="downloadBtn" class="download" href="#" download style="display:none">Download PNG</a>
       </div>
-    </header>
+      <small>Payload format: <code>roll|name</code></small>
+      <canvas id="qrCanvas" width="200" height="200"></canvas>
+    </section>
 
-    <div class="grid">
-      <div class="card">
-        <section>
-          <h2 style="font-size:16px;margin-bottom:8px">Scanner</h2>
-          <div id="scanner" class="scanner-box"></div>
-          <div style="margin-top:10px" class="controls">
-            <select id="cameraSelect"></select>
-            <button id="startBtn">Start</button>
-            <button id="stopBtn" disabled>Stop</button>
-            <button id="exportCsvBtn">Export CSV</button>
-            <button id="clearBtn">Clear</button>
-          </div>
-          <div class="footer-note">If camera isn't available, use manual entry below or generate printed QR cards for students.</div>
-        </section>
+    <hr/>
 
-        <section style="margin-top:18px">
-          <h3 style="margin:0 0 8px 0">Manual / Roster tools</h3>
-          <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;">
-            <input id="manualId" placeholder="Student ID or QR payload" />
-            <button id="manualAdd">Mark Present</button>
-          </div>
-
-          <div style="margin-top:10px">
-            <label class="muted">Upload roster CSV (id,name) — optional</label>
-            <input id="rosterFile" type="file" accept="text/csv" />
-          </div>
-        </section>
-
+    <!-- SCANNER -->
+    <section>
+      <h3>Scan QR (camera)</h3>
+      <video id="video" autoplay playsinline muted></video>
+      <div class="row" style="margin-top:8px">
+        <button id="startBtn">Start Camera</button>
+        <button id="stopBtn" class="ghost">Stop</button>
+        <button id="uploadBtn" class="ghost">Upload Image</button>
+        <input id="fileInput" type="file" accept="image/*" style="display:none" />
       </div>
+      <div id="status" style="margin-top:8px"><small>Status: idle</small></div>
+    </section>
 
-      <aside class="card">
-        <h3 style="margin-top:0">Attendance — Today</h3>
-        <div id="stats" style="margin-bottom:8px" class="muted">Loaded from local storage</div>
-        <div class="list" id="attList">
-          <table>
-            <thead>
-              <tr><th>ID</th><th>Name</th><th>Time</th></tr>
-            </thead>
-            <tbody id="attTbody"></tbody>
-          </table>
-        </div>
+    <hr/>
 
-        <hr style="margin:12px 0" />
-        <h4 style="margin:6px 0">Generate QR for ID</h4>
-        <div style="display:grid;gap:8px">
-          <input id="qrId" placeholder="student-id-123" />
-          <canvas id="qrCanvas" style="border-radius:8px;background:#fff;padding:8px"></canvas>
-          <button id="genQrBtn">Generate</button>
-        </div>
+    <!-- ATTENDANCE -->
+    <section>
+      <h3>Attendance (local)</h3>
+      <div class="row">
+        <button id="exportAll">Export Attendance CSV</button>
+        <button id="clearAll" class="ghost">Clear All</button>
+      </div>
+      <ul id="records"></ul>
+    </section>
 
-      </aside>
-    </div>
+    <hr/>
+
+    <!-- STUDENTS -->
+    <section>
+      <h3>Student List (CSV)</h3>
+      <div class="row">
+        <input type="file" id="studentFile" accept=".csv"/>
+        <button id="importFileBtn">Import File</button>
+        <button id="exportStudents">Export Students</button>
+      </div>
+      <textarea id="studentTextarea" placeholder="Paste CSV: roll,name"></textarea>
+      <button id="importTextareaBtn">Import from Textarea</button>
+      <ul id="students"></ul>
+    </section>
   </div>
 
 <script>
-// --- Simple offline-friendly attendance prototype ---
-window.addEventListener('load', async ()=> {
-  loadRoster();
-  displayAttendance();
+document.addEventListener('DOMContentLoaded', ()=>{
 
-  const cameraSelect = document.getElementById('cameraSelect');
+  // Storage keys
+  const ATT_KEY = 'qr_att_records_v1';
+  const STU_KEY = 'qr_students_v1';
 
-  try {
-    const devices = await Html5Qrcode.getCameras();
+  // helpers
+  function load(key){ try{return JSON.parse(localStorage.getItem(key)||'[]');}catch{return[];} }
+  function save(key,val){ localStorage.setItem(key,JSON.stringify(val)); }
 
-    if (devices && devices.length) {
-      // Clear any old options
-      cameraSelect.innerHTML = '';
-
-      devices.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = d.label || `Camera ${cameraSelect.length + 1}`;
-        cameraSelect.appendChild(opt);
-      });
-
-      currentCameraId = devices[0].id;
-      cameraSelect.value = currentCameraId;
-    } else {
-      const opt = document.createElement('option');
-      opt.textContent = 'No cameras found';
-      cameraSelect.appendChild(opt);
-    }
-  } catch (e) {
-    console.error('Error getting cameras:', e);
-    const opt = document.createElement('option');
-    opt.textContent = 'Camera access blocked or not available';
-    cameraSelect.appendChild(opt);
-  }
-
-  cameraSelect.addEventListener('change', (e)=> {
-    currentCameraId = e.target.value;
-  });
-
-  // Rest of your code (start/stop buttons etc.) stays same...
-});
-
-const ATT_KEY = 'qr_attendance_records_v1';
-const ROSTER_KEY = 'qr_roster_v1';
-let html5QrCode;
-let currentCameraId = null;
-let roster = {}; // id -> name
-let attendance = loadAttendance();
-
-function loadAttendance(){
-  try{
-    const raw = localStorage.getItem(ATT_KEY) || '[]';
-    return JSON.parse(raw);
-  }catch(e){return []}
-}
-function saveAttendance(){
-  localStorage.setItem(ATT_KEY, JSON.stringify(attendance));
-}
-function loadRoster(){
-  try{ const raw = localStorage.getItem(ROSTER_KEY) || '{}'; roster = JSON.parse(raw);}catch(e){roster={}};
-}
-function saveRoster(){
-  localStorage.setItem(ROSTER_KEY, JSON.stringify(roster));
-}
-
-function displayAttendance(){
-  const tbody = document.getElementById('attTbody');
-  tbody.innerHTML = '';
-  attendance.slice().reverse().forEach(rec=>{
-    const tr = document.createElement('tr');
-    const idTd=document.createElement('td'); idTd.textContent=rec.id;
-    const nameTd=document.createElement('td'); nameTd.textContent = roster[rec.id] || rec.name || '';
-    const tTd=document.createElement('td'); tTd.textContent = new Date(rec.ts).toLocaleString('en-IN');
-    tr.appendChild(idTd);tr.appendChild(nameTd);tr.appendChild(tTd);
-    tbody.appendChild(tr);
-  });
-  document.getElementById('stats').textContent = `${attendance.length} records — Saved locally`;
-}
-
-function onScanSuccess(decodedText, decodedResult){
-  let id = decodedText;
-  let name = '';
-  try{
-    const parsed = JSON.parse(decodedText);
-    if(parsed && parsed.id){ id = parsed.id; name = parsed.name || '' }
-  }catch(e){}
-  markPresent(id, name, true);
-}
-
-function markPresent(id, name='', fromScan=false){
-  if(!id) return;
-  const now = Date.now();
-  const recent = attendance.find(a=>a.id===id && now - a.ts < 30*1000);
-  if(recent){ if(!fromScan) alert('This student was just marked.'); return; }
-  attendance.push({id, name, ts: now});
-  saveAttendance();
-  displayAttendance();
-}
-
-function exportCsv(){
-  const rows = [['id','name','timestamp']];
-  attendance.forEach(r=> rows.push([r.id, roster[r.id] || r.name || '', new Date(r.ts).toISOString()]));
-  const csv = rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv],{type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download = `attendance-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-
- async function listCameras(){
-    const select=document.getElementById('cameraSelect');
-    select.innerHTML="";
-    const devices=await navigator.mediaDevices.enumerateDevices();
-    const cams=devices.filter(d=>d.kind==='videoinput');
-    cams.forEach((c,i)=>{
-      const opt=document.createElement('option'); opt.value=c.deviceId;
-      opt.textContent = c.label || `Camera ${i+1}`; select.appendChild(opt);
+  // attendance
+  function loadAttendance(){ return load(ATT_KEY); }
+  function saveAttendance(v){ save(ATT_KEY,v); renderRecords(); }
+  function renderRecords(){
+    const arr = loadAttendance();
+    recordsUl.innerHTML='';
+    arr.forEach((r,i)=>{
+      const li=document.createElement('li');
+      li.textContent=`${r.date} ${new Date(r.ts).toLocaleTimeString()} — ${r.roll} — ${r.name}`;
+      recordsUl.appendChild(li);
     });
   }
+
+  // students
+  function loadStudents(){ return load(STU_KEY); }
+  function saveStudents(v){ save(STU_KEY,v); renderStudents(); }
+  function renderStudents(){
+    const arr=loadStudents();
+    studentsUl.innerHTML='';
+    arr.forEach(s=>{
+      const li=document.createElement('li');
+      li.textContent=`${s.roll} — ${s.name}`;
+      studentsUl.appendChild(li);
+    });
+  }
+
+  // DOM refs
+  const genRoll=document.getElementById('genRoll');
+  const genName=document.getElementById('genName');
+  const genBtn=document.getElementById('genBtn');
+  const qrCanvas=document.getElementById('qrCanvas');
+  const downloadBtn=document.getElementById('downloadBtn');
+  const video=document.getElementById('video');
+  const startBtn=document.getElementById('startBtn');
+  const stopBtn=document.getElementById('stopBtn');
+  const uploadBtn=document.getElementById('uploadBtn');
+  const fileInput=document.getElementById('fileInput');
+  const status=document.getElementById('status');
+  const recordsUl=document.getElementById('records');
+  const clearAll=document.getElementById('clearAll');
+  const exportAll=document.getElementById('exportAll');
+  const studentsUl=document.getElementById('students');
+  const studentFile=document.getElementById('studentFile');
+  const importFileBtn=document.getElementById('importFileBtn');
+  const exportStudents=document.getElementById('exportStudents');
+  const studentTextarea=document.getElementById('studentTextarea');
+  const importTextareaBtn=document.getElementById('importTextareaBtn');
+
+  renderRecords();
+  renderStudents();
+
+  // QR generation
+  genBtn.addEventListener('click',()=>{
+    const roll=genRoll.value.trim();
+    let name=genName.value.trim();
+    if(!roll){alert('Enter roll');return;}
+    if(!name){
+      const stu=loadStudents().find(s=>s.roll===roll);
+      if(stu) name=stu.name;
+    }
+    const payload=name?`${roll}|${name}`:roll;
+    new QRious({element:qrCanvas,value:payload,size:300});
+    const dataUrl=qrCanvas.toDataURL('image/png');
+    downloadBtn.href=dataUrl;
+    downloadBtn.download=`qr_${roll}.png`;
+    downloadBtn.style.display='inline-block';
+    status.innerHTML=`<small>Generated payload: <code>${payload}</code></small>`;
+  });
+
+  // Camera scanner
+  let stream=null;let scanning=false;
+  const hiddenCanvas=document.createElement('canvas');
 
   async function startCamera(){
-    const cameraId=document.getElementById('cameraSelect').value;
-    if(!cameraId && navigator.mediaDevices.getUserMedia===undefined){ alert("Camera not supported"); return; }
-    const constraints = { video: { deviceId: cameraId ? {exact: cameraId} : undefined, width: {ideal:1280} } };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject=stream;
-    await video.play();
-    scanning=true;
-    document.getElementById('startBtn').disabled=true;
-    document.getElementById('stopBtn').disabled=false;
-    tick();
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      video.srcObject=stream;
+      await video.play();
+      scanning=true;
+      scanTick();
+      status.innerHTML='<small>Status: scanning...</small>';
+    }catch(e){alert('Camera error: '+e);}
   }
+  function stopCamera(){scanning=false;if(stream){stream.getTracks().forEach(t=>t.stop());}video.srcObject=null;}
 
-  function stopCamera(){
-    scanning=false;
-    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    document.getElementById('startBtn').disabled=false;
-    document.getElementById('stopBtn').disabled=true;
-  }
-
-  // Ask permission explicitly
-navigator.mediaDevices.getUserMedia({ video: true })
-  .then(stream => {
-    stream.getTracks().forEach(track => track.stop()); // release cam
-    console.log("Permission granted");
-  })
-  .catch(err => {
-    alert("Camera permission denied: " + err);
-  });
-async function initCameras() {
-  const cameraSelect = document.getElementById('cameraSelect');
-  cameraSelect.innerHTML = '';
-
-  try {
-    // First request permission
-    await navigator.mediaDevices.getUserMedia({ video: true });
-
-    // Now list cameras
-    const devices = await Html5Qrcode.getCameras();
-
-    if (devices && devices.length) {
-      devices.forEach((d, idx) => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        // Some browsers only give "camera 0/1" until user grants permission
-        opt.textContent = d.label || `Camera ${idx + 1}`;
-        cameraSelect.appendChild(opt);
-      });
-
-      currentCameraId = devices[0].id;
-      cameraSelect.value = currentCameraId;
-    } else {
-      const opt = document.createElement('option');
-      opt.textContent = 'No cameras found';
-      cameraSelect.appendChild(opt);
+  function scanTick(){
+    if(!scanning) return;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      hiddenCanvas.width=video.videoWidth;
+      hiddenCanvas.height=video.videoHeight;
+      const ctx=hiddenCanvas.getContext('2d');
+      ctx.drawImage(video,0,0);
+      const img=ctx.getImageData(0,0,hiddenCanvas.width,hiddenCanvas.height);
+      const code=jsQR(img.data,img.width,img.height);
+      if(code){ handlePayload(code.data); scanning=false; setTimeout(()=>{scanning=true;scanTick();},1500); return;}
     }
-  } catch (err) {
-    console.error("Camera init error:", err);
-    const opt = document.createElement('option');
-    opt.textContent = 'Camera permission denied or not available';
-    cameraSelect.appendChild(opt);
-  }
-}
-
-window.addEventListener('load', () => {
-  loadRoster();
-  displayAttendance();
-
-  initCameras();  // ✅ call the fixed function
-
-  document.getElementById('cameraSelect').addEventListener('change', (e)=> {
-    currentCameraId = e.target.value;
-  });
-
-  // your existing start/stop button code...
-});
-
-
-window.addEventListener('load', async ()=>{
-  loadRoster();
-  displayAttendance();
-
-  const cameraSelect = document.getElementById('cameraSelect');
-  try{
-    const devices = await Html5Qrcode.getCameras();
-    devices.forEach(d=>{
-      const opt = document.createElement('option'); opt.value=d.id; opt.textContent = d.label || d.id; cameraSelect.appendChild(opt);
-    });
-    if(devices.length>0){ currentCameraId = devices[0].id; cameraSelect.value=currentCameraId }
-  }catch(e){
-    const opt = document.createElement('option'); opt.textContent = 'No camera available'; cameraSelect.appendChild(opt);
+    requestAnimationFrame(scanTick);
   }
 
-  cameraSelect.addEventListener('change', (e)=>{ currentCameraId = e.target.value; });
-
-  document.getElementById('startBtn').addEventListener('click', ()=>{
-    if(!currentCameraId){ alert('No camera selected.'); return; }
-    if(!html5QrCode) html5QrCode = new Html5Qrcode('scanner');
-    html5QrCode.start(
-      currentCameraId,
-      { fps: 10, qrbox: {width: 250, height: 250} },
-      onScanSuccess,
-      (err)=>{ }
-    ).then(()=>{
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-    }).catch(err=>{ alert('Unable to start camera: '+err); });
-  });
-
-  document.getElementById('stopBtn').addEventListener('click', ()=>{
-    if(html5QrCode){ html5QrCode.stop().then(()=>{ document.getElementById('startBtn').disabled=false; document.getElementById('stopBtn').disabled=true; }).catch(()=>{}); }
-  });
-
-  document.getElementById('manualAdd').addEventListener('click', ()=>{
-    const v = document.getElementById('manualId').value.trim();
-    if(!v) return alert('Enter ID');
-    let name='';
-    if(v.includes('{')){
-      try{ const p = JSON.parse(v); if(p.id) { markPresent(p.id,p.name||''); document.getElementById('manualId').value=''; return; } }catch(e){}
-    }
-    markPresent(v,'',false);
-    document.getElementById('manualId').value='';
-  });
-
-  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-  document.getElementById('clearBtn').addEventListener('click', ()=>{ if(confirm('Clear all attendance records?')){ attendance=[]; saveAttendance(); displayAttendance(); } });
-
-  document.getElementById('rosterFile').addEventListener('change', (e)=>{
-    const f = e.target.files[0]; if(!f) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      const txt = reader.result;
-      txt.split(/\r?\n/).forEach(line=>{
-        const parts = line.split(',').map(s=>s.trim());
-        if(parts[0]) roster[parts[0]] = parts.slice(1).join(',') || roster[parts[0]] || '';
-      });
-      saveRoster();
-      displayAttendance();
-      alert('Roster loaded: ' + Object.keys(roster).length + ' entries');
+  startBtn.onclick=startCamera;
+  stopBtn.onclick=stopCamera;
+  uploadBtn.onclick=()=>fileInput.click();
+  fileInput.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        hiddenCanvas.width=img.width;hiddenCanvas.height=img.height;
+        const ctx=hiddenCanvas.getContext('2d');ctx.drawImage(img,0,0);
+        const data=ctx.getImageData(0,0,img.width,img.height);
+        const code=jsQR(data.data,data.width,data.height);
+        if(code) handlePayload(code.data); else alert('No QR found');
+      };
+      img.src=ev.target.result;
     };
-    reader.readAsText(f);
-  });
+    reader.readAsDataURL(f);
+  };
 
-  document.getElementById('genQrBtn').addEventListener('click', ()=>{
-    const id = document.getElementById('qrId').value.trim(); if(!id) return alert('Enter an ID to generate');
-    const qr = new QRious({element: document.getElementById('qrCanvas'), value: id, size: 200});
-  });
+  // ✅ Payload handler with duplicate check
+  function handlePayload(payload){
+    let roll=payload,name='';
+    if(payload.includes('|')){[roll,name]=payload.split('|');}
+    roll=roll.trim();name=(name||'').trim();
+    if(!name){
+      const stu=loadStudents().find(s=>s.roll===roll);
+      if(stu) name=stu.name;
+    }
+    const recs=loadAttendance();
+    const today=new Date().toISOString().slice(0,10);
+
+    // Duplicate detection
+    if(recs.some(r=>r.roll===roll && r.date===today)){
+      status.innerHTML=`<small style="color:red">❌ Already marked today: ${roll} — ${name||'Unknown'}</small>`;
+      return;
+    }
+
+    // New record
+    recs.unshift({roll,name:name||'Unknown',ts:Date.now(),date:today});
+    saveAttendance(recs);
+    status.innerHTML=`<small style="color:green">✔ Marked: ${roll} — ${name||'Unknown'}</small>`;
+  }
+
+  // Attendance export/clear
+  clearAll.onclick=()=>{if(confirm('Clear all?')){localStorage.removeItem(ATT_KEY);renderRecords();}};
+  exportAll.onclick=()=>{
+    const recs=loadAttendance();
+    let csv="roll,name,timestamp,date\n";
+    recs.forEach(r=>{csv+=`${r.roll},${r.name},${r.ts},${r.date}\n`;});
+    downloadCSV(csv,'attendance.csv');
+  };
+
+  // Students import/export
+  importFileBtn.onclick=()=>{
+    const f=studentFile.files[0];if(!f){alert('Choose file');return;}
+    const reader=new FileReader();
+    reader.onload=e=>{importCSV(e.target.result);};
+    reader.readAsText(f);
+  };
+  importTextareaBtn.onclick=()=>{importCSV(studentTextarea.value);};
+  exportStudents.onclick=()=>{
+    const stu=loadStudents();
+    let csv="roll,name\n";
+    stu.forEach(s=>{csv+=`${s.roll},${s.name}\n`;});
+    downloadCSV(csv,'students.csv');
+  };
+
+  function importCSV(text){
+    const lines=text.trim().split(/\r?\n/);
+    const stu=loadStudents();
+    lines.forEach(line=>{
+      const [roll,name]=line.split(',');
+      if(roll&&name){
+        if(!stu.find(s=>s.roll===roll.trim())){
+          stu.push({roll:roll.trim(),name:name.trim()});
+        }
+      }
+    });
+    saveStudents(stu);
+  }
+
+  function downloadCSV(data,filename){
+    const blob=new Blob([data],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;a.click();
+    URL.revokeObjectURL(url);
+  }
 
 });
 </script>
