@@ -201,6 +201,8 @@ function exportCsv(){
   URL.revokeObjectURL(url);
 }
 
+
+
   // Ask permission explicitly
 navigator.mediaDevices.getUserMedia({ video: true })
   .then(stream => {
@@ -210,6 +212,53 @@ navigator.mediaDevices.getUserMedia({ video: true })
   .catch(err => {
     alert("Camera permission denied: " + err);
   });
+async function initCameras() {
+  const cameraSelect = document.getElementById('cameraSelect');
+  cameraSelect.innerHTML = '';
+
+  try {
+    // First request permission
+    await navigator.mediaDevices.getUserMedia({ video: true });
+
+    // Now list cameras
+    const devices = await Html5Qrcode.getCameras();
+
+    if (devices && devices.length) {
+      devices.forEach((d, idx) => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        // Some browsers only give "camera 0/1" until user grants permission
+        opt.textContent = d.label || `Camera ${idx + 1}`;
+        cameraSelect.appendChild(opt);
+      });
+
+      currentCameraId = devices[0].id;
+      cameraSelect.value = currentCameraId;
+    } else {
+      const opt = document.createElement('option');
+      opt.textContent = 'No cameras found';
+      cameraSelect.appendChild(opt);
+    }
+  } catch (err) {
+    console.error("Camera init error:", err);
+    const opt = document.createElement('option');
+    opt.textContent = 'Camera permission denied or not available';
+    cameraSelect.appendChild(opt);
+  }
+}
+
+window.addEventListener('load', () => {
+  loadRoster();
+  displayAttendance();
+
+  initCameras();  // ✅ call the fixed function
+
+  document.getElementById('cameraSelect').addEventListener('change', (e)=> {
+    currentCameraId = e.target.value;
+  });
+
+  // your existing start/stop button code...
+});
 
 
 window.addEventListener('load', async ()=>{
