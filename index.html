@@ -147,22 +147,38 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderRecords();
   renderStudents();
 
-  // QR generation
+  // ✅ QR generation with duplicate check
   genBtn.addEventListener('click',()=>{
     const roll=genRoll.value.trim();
     let name=genName.value.trim();
     if(!roll){alert('Enter roll');return;}
+
+    const stuList = loadStudents();
+    const exists = stuList.find(s => s.roll === roll && s.name.toLowerCase() === name.toLowerCase());
+
+    if(exists){
+      status.innerHTML=`<small style="color:red">❌ QR already generated for: ${roll} — ${name}</small>`;
+      return;
+    }
+
     if(!name){
-      const stu=loadStudents().find(s=>s.roll===roll);
+      const stu=stuList.find(s=>s.roll===roll);
       if(stu) name=stu.name;
     }
+
+    // add new student if not exists
+    if(!stuList.find(s=>s.roll === roll)){
+      stuList.push({roll,name:name||'Unknown'});
+      saveStudents(stuList);
+    }
+
     const payload=name?`${roll}|${name}`:roll;
     new QRious({element:qrCanvas,value:payload,size:300});
     const dataUrl=qrCanvas.toDataURL('image/png');
     downloadBtn.href=dataUrl;
     downloadBtn.download=`qr_${roll}.png`;
     downloadBtn.style.display='inline-block';
-    status.innerHTML=`<small>Generated payload: <code>${payload}</code></small>`;
+    status.innerHTML=`<small style="color:green">✔ QR generated: <code>${payload}</code></small>`;
   });
 
   // Camera scanner
@@ -227,13 +243,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const recs=loadAttendance();
     const today=new Date().toISOString().slice(0,10);
 
-    // Duplicate detection
     if(recs.some(r=>r.roll===roll && r.date===today)){
       status.innerHTML=`<small style="color:red">❌ Already marked today: ${roll} — ${name||'Unknown'}</small>`;
       return;
     }
 
-    // New record
     recs.unshift({roll,name:name||'Unknown',ts:Date.now(),date:today});
     saveAttendance(recs);
     status.innerHTML=`<small style="color:green">✔ Marked: ${roll} — ${name||'Unknown'}</small>`;
