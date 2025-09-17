@@ -201,6 +201,17 @@ function exportCsv(){
   URL.revokeObjectURL(url);
 }
 
+  // Ask permission explicitly
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => {
+    stream.getTracks().forEach(track => track.stop()); // release cam
+    console.log("Permission granted");
+  })
+  .catch(err => {
+    alert("Camera permission denied: " + err);
+  });
+
+
 window.addEventListener('load', async ()=>{
   loadRoster();
   displayAttendance();
