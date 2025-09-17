@@ -202,6 +202,36 @@ function exportCsv(){
 }
 
 
+ async function listCameras(){
+    const select=document.getElementById('cameraSelect');
+    select.innerHTML="";
+    const devices=await navigator.mediaDevices.enumerateDevices();
+    const cams=devices.filter(d=>d.kind==='videoinput');
+    cams.forEach((c,i)=>{
+      const opt=document.createElement('option'); opt.value=c.deviceId;
+      opt.textContent = c.label || `Camera ${i+1}`; select.appendChild(opt);
+    });
+  }
+
+  async function startCamera(){
+    const cameraId=document.getElementById('cameraSelect').value;
+    if(!cameraId && navigator.mediaDevices.getUserMedia===undefined){ alert("Camera not supported"); return; }
+    const constraints = { video: { deviceId: cameraId ? {exact: cameraId} : undefined, width: {ideal:1280} } };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject=stream;
+    await video.play();
+    scanning=true;
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('stopBtn').disabled=false;
+    tick();
+  }
+
+  function stopCamera(){
+    scanning=false;
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    document.getElementById('startBtn').disabled=false;
+    document.getElementById('stopBtn').disabled=true;
+  }
 
   // Ask permission explicitly
 navigator.mediaDevices.getUserMedia({ video: true })
